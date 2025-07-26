@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
@@ -16,7 +17,7 @@ import java.time.LocalDateTime;
 @Table(name = "users")
 public class User {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private long id;
     private String firstName;
     private String lastName;
@@ -25,7 +26,7 @@ public class User {
     private String address;
     private String stateOfOrgin;
     private String accountNumber;
-    private String BigDecimal;
+    private BigDecimal accountBalance;
     private String email;
     private String phoneNumber;
     private String alternativePhoneNumber;
