@@ -1,13 +1,13 @@
 // /Users/ravindarreddykakunuri/Desktop/Banking-Application/src/main/java/com/example/Banking/Application/service/impl/UserServiceImpl.java
 package com.example.Banking.Application.service.impl;
 
-import com.example.Banking.Application.dto.AccountInfo;
-import com.example.Banking.Application.dto.BankResponse;
-import com.example.Banking.Application.dto.UserRequest;
+import com.example.Banking.Application.dto.*;
 import com.example.Banking.Application.entity.User;
 import com.example.Banking.Application.repository.UserRepository;
 import com.example.Banking.Application.utlis.AccountUtils;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -15,10 +15,14 @@ import java.math.BigDecimal;
 import static com.example.Banking.Application.utlis.AccountUtils.*;
 
 @Service
-@RequiredArgsConstructor // Best practice: Use constructor injection
+@RequiredArgsConstructor// Best practice: Use constructor injection
 public class UserServiceImpl implements UserService {
 
-    private final UserRepository userRepository; // Injected via constructor
+    @Autowired
+    UserRepository userRepository; // Injected via constructor
+
+    @Autowired
+    EmailService emailService;
 
     @Override
     public BankResponse createAccount(UserRequest userRequest) {
@@ -39,7 +43,7 @@ public class UserServiceImpl implements UserService {
                 .otherName(userRequest.getOtherName())
                 .gender(userRequest.getGender())
                 .address(userRequest.getAddress())
-                .stateOfOrgin(userRequest.getStateOfOrgin()) // Typo: should be stateOfOrigin
+                .stateOfOrgin(userRequest.getStateOfOrigin()) // Typo: should be stateOfOrigin
                 .phoneNumber(userRequest.getPhoneNumber())
                 .alternativePhoneNumber(userRequest.getAlternativePhoneNumber())
                 .status("ACTIVE") // Using an Enum for status is even better
@@ -50,6 +54,11 @@ public class UserServiceImpl implements UserService {
 
         User savedUser = userRepository.save(newUser);
 
+        EmailDetails emailsDetails = new EmailDetails();
+        emailsDetails.setRecepient(savedUser.getEmail());
+        emailsDetails.setSubject("ACCOUNT CREATION INFO");
+        emailsDetails.setMessageBody("Congratulations Your Account Has Been Created Successfully😋/\n Your Account Details:\n Account Name:" + savedUser.getFirstName() + " " + savedUser.getLastName() + "\n Account Number:" + savedUser.getAccountNumber());
+        emailService.sendEMailAlert(emailsDetails);
         // Return a complete and successful response
         return BankResponse.builder()
                 .responseCode(AccountUtils.ACCOUNT_CREATION_SUCCESS) // Assuming you add this constant
@@ -60,5 +69,126 @@ public class UserServiceImpl implements UserService {
                         .accountBalance(savedUser.getAccountBalance())
                         .build())
                 .build();
+    }
+
+    @Override
+    public BankResponse balanceEnquiry(EnquiryRequest request) {
+        // Check if account exists
+        boolean isAccountExist = userRepository.existsByAccountNumber(request.getAccountNumber());
+        if (!isAccountExist) {
+            return BankResponse.builder()
+                    .responseCode(ACCOUNT_NOT_EXIST_CODE)
+                    .responseMessage(ACCOUNT_NOT_EXIST_MESSAGE)
+                    .build();
+        }
+
+        // Find user by account number
+        User userFound = userRepository.findByAccountNumber(request.getAccountNumber());
+
+        // Return response with account details
+        return BankResponse.builder()
+                .responseCode(ACCOUNT_FOUND_CODE)
+                .responseMessage(ACCOUNT_FOUND_MESSAGE)
+                .accountInfo(AccountInfo.builder()
+                        .accountName(userFound.getFirstName() + " " + userFound.getLastName())
+                        .accountNumber(userFound.getAccountNumber())
+                        .accountBalance(userFound.getAccountBalance())
+                        .build())
+                .build();
+    }
+
+    @Override
+    public String nameEnquiry(EnquiryRequest request) {
+        // Check if account exists
+        boolean isAccountExist = userRepository.existsByAccountNumber(request.getAccountNumber());
+        if (!isAccountExist) {
+            return ACCOUNT_NOT_EXIST_MESSAGE;
+        }
+        // Find user by account number
+        User userFound = userRepository.findByAccountNumber(request.getAccountNumber());
+        // Return response with account details
+        return userFound.getFirstName() + " " + userFound.getLastName();
+    }
+
+    @Override
+    public BankResponse creditDebit(CreditDebitRequest request) {
+        // Check if account exists
+
+        boolean isAccountExist = userRepository.existsByAccountNumber(request.getAccountNumber());
+        if (!isAccountExist) {
+            return BankResponse.builder()
+                    .responseCode(ACCOUNT_NOT_EXIST_CODE)
+                    .responseMessage(ACCOUNT_NOT_EXIST_MESSAGE)
+                    .build();
+
+        }
+
+        //Find the Account Number and Credit to that particular Account
+        User userToCredit = userRepository.findByAccountNumber(request.getAccountNumber());
+
+        /**
+         * Logic Below
+         * Fetching the Account and setAccountBalance()--> is used to update the Balance
+         * userToCredit.getAccountBalance()--> Fetching the Balance from the Database(H2-Database) add(request.getAmount())--> is used to append the Amount from the User(I am using the {Postman to send the Amount to the Account Number)
+         */
+        userToCredit.setAccountBalance(userToCredit.getAccountBalance().add(request.getAmount()));
+        userRepository.save(userToCredit);
+
+        return BankResponse.builder()
+                .responseCode(AccountUtils.ACCOUNT_CREDIT_SUCCESS)
+                .responseMessage(AccountUtils.ACCOUNT_CREDIT_SUCCESS_MESSAGE)
+                .accountInfo(AccountInfo.builder()
+                .accountName(userToCredit.getFirstName() + " " + userToCredit.getLastName())
+                        .accountNumber(request.getAccountNumber())
+                        .accountBalance(userToCredit.getAccountBalance())
+                        .build())
+                .build();
+    }
+
+    @Override
+    public BankResponse debitRequest(CreditDebitRequest request) {
+        /**
+         * Check whether account is Existed or not?
+         *
+         */
+        boolean isAccountExist = userRepository.existsByAccountNumber(request.getAccountNumber());
+        if (!isAccountExist) {
+            return BankResponse.builder()
+                    .responseCode(AccountUtils.ACCOUNT_NOT_EXIST_CODE)
+                    .responseMessage(AccountUtils.ACCOUNT_NOT_EXIST_MESSAGE)
+                    .build();
+        }
+
+        User userToDebit = userRepository.findByAccountNumber(request.getAccountNumber());
+        int availableBalance = userToDebit.getAccountBalance().intValue();
+        int debitAmount = request.getAmount().intValue();
+        if(availableBalance < debitAmount)
+        {
+            return BankResponse.builder()
+                    .responseCode(AccountUtils.INSUFFICIENT_BALANCE_CODE)
+                    .responseMessage(AccountUtils.INSUFFICIENT_BALANCE_MESSAGE)
+                    .accountInfo(AccountInfo.builder()
+                            .accountName(userToDebit.getFirstName() + " " + userToDebit.getLastName())
+                            .accountNumber(userToDebit.getAccountNumber())
+                            .accountBalance(userToDebit.getAccountBalance())
+                            .build())
+                    .build();
+        }
+        else{
+            userToDebit.setAccountBalance(userToDebit.getAccountBalance().subtract(request.getAmount()));
+            userRepository.save(userToDebit);
+            return BankResponse.builder()
+                    .responseCode(DEBIT_SUCCESS_CODE)
+                    .responseMessage(DEBIT_SUCCESS_MESSAGE)
+                    .accountInfo(AccountInfo.builder()
+                            .accountName(userToDebit.getFirstName() + " " + userToDebit.getLastName())
+                            .accountNumber(userToDebit.getAccountNumber())
+                            .accountBalance(userToDebit.getAccountBalance())
+                            .build())
+                    .build();
+
+        }
+
+
     }
 }

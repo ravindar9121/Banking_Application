@@ -1,4 +1,9 @@
 package com.example.Banking.Application.service.impl;
 
-public class EmailService {
+import com.example.Banking.Application.dto.EmailDetails;
+
+public interface EmailService {
+    void sendEMailAlert(EmailDetails details);
+
+
 }

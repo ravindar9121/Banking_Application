@@ -1,6 +1,8 @@
 package com.example.Banking.Application.controller;
 
 import com.example.Banking.Application.dto.BankResponse;
+import com.example.Banking.Application.dto.CreditDebitRequest;
+import com.example.Banking.Application.dto.EnquiryRequest;
 import com.example.Banking.Application.dto.UserRequest;
 import com.example.Banking.Application.service.impl.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,8 +18,24 @@ public class UserController {
         return userService.createAccount(userRequest);
     }
 
-    @RequestMapping("/greeting")
-    public String gr(){
-        return "WElcome";
+    @GetMapping("/balanceEnquiry")
+    public BankResponse balanceEnquiry(@RequestBody EnquiryRequest request){
+        return userService.balanceEnquiry(request);
     }
+
+    @GetMapping("/nameEnquiry")
+    public String nameEnquiry(@RequestBody EnquiryRequest request){
+        return userService.nameEnquiry(request);
+    }
+
+    @PostMapping("/credit")
+    public BankResponse creditDebit(@RequestBody CreditDebitRequest request){
+        return userService.creditDebit(request);
+    }
+
+    @PostMapping("/debit")
+    public BankResponse debitRequest(@RequestBody CreditDebitRequest request){
+        return userService.debitRequest(request);
+    }
+
 }
