@@ -191,4 +191,76 @@ public class UserServiceImpl implements UserService {
 
 
     }
+
+    @Override
+    public BankResponse transferRequest(tranferRequest request) {
+        /**
+         * Check Source and Destination Account Number Exist or not?
+         * If Source Account Balance is lesser than transfer balance then give a message "Insufficient Balance", if not do the Balance Transfer from Source to Destination.
+         * Update Both Account Balance.
+         */
+        boolean sourceAccExist = userRepository.existsByAccountNumber(request.getSourceAccountNumber());
+        boolean destinationAccExist = userRepository.existsByAccountNumber(request.getDestinationAccountNumber());
+
+
+        if (!sourceAccExist){
+            if (!destinationAccExist) {
+                return BankResponse.builder()
+                        .responseCode(AccountUtils.ACCOUNT_NOT_EXIST_CODE)
+                        .responseMessage(AccountUtils.ACCOUNT_NOT_EXIST_MESSAGE)
+                        .accountInfo(null)
+                        .build();
+            }
+        }
+        User sourceAcc = userRepository.findByAccountNumber(request.getSourceAccountNumber());
+        User destinationAcc = userRepository.findByAccountNumber(request.getDestinationAccountNumber());
+
+
+        if (sourceAcc == null || destinationAcc == null) {
+            // Defensive check, should not happen if existsByAccountNumber works correctly
+            return BankResponse.builder()
+                    .responseCode(AccountUtils.ACCOUNT_NOT_EXIST_CODE)
+                    .responseMessage(AccountUtils.ACCOUNT_NOT_EXIST_MESSAGE)
+                    .accountInfo(null)
+                    .build();
+        }
+
+        if (sourceAcc.getAccountBalance().compareTo(request.getAmount()) < 0) {
+            return BankResponse.builder()
+                    .responseCode(AccountUtils.INSUFFICIENT_BALANCE_CODE) // define this constant if not defined
+                    .responseMessage(AccountUtils.INSUFFICIENT_BALANCE_MESSAGE)
+                    .accountInfo(AccountInfo.builder()
+                            .accountName(sourceAcc.getFirstName() + " " + sourceAcc.getLastName())
+                            .accountNumber(sourceAcc.getAccountNumber())
+                            .accountBalance(sourceAcc.getAccountBalance())
+                            .build())
+                            .build();
+        }
+
+        /**
+         * Amount Deduct from Source Account
+         */
+        sourceAcc.setAccountBalance(sourceAcc.getAccountBalance().subtract(request.getAmount()));
+        userRepository.save(sourceAcc);
+        /**
+         * Amount Credit to Destination Account
+         */
+        destinationAcc.setAccountBalance(destinationAcc.getAccountBalance().add(request.getAmount()));
+        userRepository.save(destinationAcc);
+
+
+        return BankResponse.builder()
+                .responseCode("001")
+                .responseMessage("Transfer Successful")
+                .accountInfo(AccountInfo.builder()
+                        .accountName(sourceAcc.getFirstName() + " " + sourceAcc.getLastName())
+                        .accountNumber(sourceAcc.getAccountNumber())
+                        .accountBalance(sourceAcc.getAccountBalance())
+                        .build())
+
+                .build();
+    }
 }
+
+
+
