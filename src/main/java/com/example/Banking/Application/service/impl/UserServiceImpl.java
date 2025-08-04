@@ -1,11 +1,9 @@
 // /Users/ravindarreddykakunuri/Desktop/Banking-Application/src/main/java/com/example/Banking/Application/service/impl/UserServiceImpl.java
 package com.example.Banking.Application.service.impl;
-
 import com.example.Banking.Application.dto.*;
 import com.example.Banking.Application.entity.User;
 import com.example.Banking.Application.repository.UserRepository;
 import com.example.Banking.Application.utlis.AccountUtils;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -23,6 +21,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     EmailService emailService;
+
+    @Autowired
+    TransactionHistoryService transactionHistoryService;
 
     @Override
     public BankResponse createAccount(UserRequest userRequest) {
@@ -134,6 +135,14 @@ public class UserServiceImpl implements UserService {
         userToCredit.setAccountBalance(userToCredit.getAccountBalance().add(request.getAmount()));
         userRepository.save(userToCredit);
 
+        TransactionDto transactionDto = TransactionDto.builder()
+                .transactionType("CREDIT")
+                .accountNumber(userToCredit.getAccountNumber())
+                .amount(request.getAmount())
+                .build();
+        transactionHistoryService.saveTransaction(transactionDto);
+
+
         return BankResponse.builder()
                 .responseCode(AccountUtils.ACCOUNT_CREDIT_SUCCESS)
                 .responseMessage(AccountUtils.ACCOUNT_CREDIT_SUCCESS_MESSAGE)
@@ -177,6 +186,12 @@ public class UserServiceImpl implements UserService {
         else{
             userToDebit.setAccountBalance(userToDebit.getAccountBalance().subtract(request.getAmount()));
             userRepository.save(userToDebit);
+            TransactionDto transactionDto = TransactionDto.builder()
+                    .transactionType("DEBIT")
+                    .accountNumber(userToDebit.getAccountNumber())
+                    .amount(request.getAmount())
+                    .build();
+            transactionHistoryService.saveTransaction(transactionDto);
             return BankResponse.builder()
                     .responseCode(DEBIT_SUCCESS_CODE)
                     .responseMessage(DEBIT_SUCCESS_MESSAGE)
@@ -193,7 +208,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public BankResponse transferRequest(tranferRequest request) {
+    public BankResponse transferRequest(TranferRequest request) {
         /**
          * Check Source and Destination Account Number Exist or not?
          * If Source Account Balance is lesser than transfer balance then give a message "Insufficient Balance", if not do the Balance Transfer from Source to Destination.
@@ -242,12 +257,39 @@ public class UserServiceImpl implements UserService {
          */
         sourceAcc.setAccountBalance(sourceAcc.getAccountBalance().subtract(request.getAmount()));
         userRepository.save(sourceAcc);
+
+
+
+// Create and send email notification for Debit transfer Account
+        EmailDetails transferDebitEmailDetails = new EmailDetails();
+        transferDebitEmailDetails.setRecepient(sourceAcc.getEmail());
+        transferDebitEmailDetails.setSubject("TRANSACTION ALERT: FUND TRANSFER");
+        transferDebitEmailDetails.setMessageBody("Dear " + sourceAcc.getFirstName() + ",\n\nYour account has been debited with "
+                + request.getAmount() + ". Transfer to account: " + request.getDestinationAccountNumber()
+                + "\nCurrent balance: " + sourceAcc.getAccountBalance());
+        emailService.sendEMailAlert(transferDebitEmailDetails);
         /**
          * Amount Credit to Destination Account
          */
         destinationAcc.setAccountBalance(destinationAcc.getAccountBalance().add(request.getAmount()));
         userRepository.save(destinationAcc);
 
+        // Create and send email notification for Credit transfer Account
+        EmailDetails transferCreditEmailDetails = new EmailDetails();
+        transferCreditEmailDetails.setRecepient(sourceAcc.getEmail());
+        transferCreditEmailDetails.setSubject("TRANSACTION ALERT: FUND RECEIVED");
+        transferCreditEmailDetails.setMessageBody("Dear " + destinationAcc.getFirstName() + ",\n\nYour account has been credited with 💲"
+                + request.getAmount() + ". Received from account: " + request.getSourceAccountNumber()
+                + "\nCurrent balance: " + destinationAcc.getAccountBalance());
+        emailService.sendEMailAlert(transferCreditEmailDetails);
+
+
+        TransactionDto transactionDto = TransactionDto.builder()
+                .transactionType("CREDIT")
+                .accountNumber(destinationAcc.getAccountNumber())
+                .amount(request.getAmount())
+                .build();
+        transactionHistoryService.saveTransaction(transactionDto);
 
         return BankResponse.builder()
                 .responseCode("001")
